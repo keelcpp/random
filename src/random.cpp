@@ -56,7 +56,7 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
 #if defined(__linux__) || defined(__ANDROID__) || defined(__EMSCRIPTEN__)
     bool use_urandom = false;
     while (remaining > 0) {
-        const ssize_t n = ::getrandom(ptr, remaining, 0);
+        const isize n = static_cast<isize>(::getrandom(ptr, remaining, 0));
         if (n > 0) {
             ptr += static_cast<usize>(n);
             remaining -= static_cast<usize>(n);
@@ -76,16 +76,16 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
     }
 #endif
 
-    int fd = -1;
+    i32 fd = -1;
     do {
-        fd = ::open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+        fd = static_cast<i32>(::open("/dev/urandom", O_RDONLY | O_CLOEXEC));
     } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
         return Error{ErrorCode::IoError, static_cast<i32>(errno)};
     }
 
     while (remaining > 0) {
-        const ssize_t n = ::read(fd, ptr, remaining);
+        const isize n = static_cast<isize>(::read(fd, ptr, remaining));
         if (n > 0) {
             ptr += static_cast<usize>(n);
             remaining -= static_cast<usize>(n);
