@@ -32,14 +32,14 @@ SampleStats collect_stats(keel::usize n, Fn&& fn) {
     keel::f64 lo = 1e300;
     keel::f64 hi = -1e300;
     for (keel::usize i = 1; i <= n; ++i) {
-        const keel::f64 x = static_cast<keel::f64>(fn());
+        const keel::f64 x = keel::as<keel::f64>(fn());
         if (x < lo) lo = x;
         if (x > hi) hi = x;
         const keel::f64 delta = x - mean;
-        mean += delta / static_cast<keel::f64>(i);
+        mean += delta / keel::as<keel::f64>(i);
         m2 += delta * (x - mean);
     }
-    return SampleStats{mean, m2 / static_cast<keel::f64>(n - 1), lo, hi};
+    return SampleStats{mean, m2 / keel::as<keel::f64>(n - 1), lo, hi};
 }
 
 void test_os_random() {
@@ -344,10 +344,10 @@ void test_discrete_and_combinatorial() {
         CHECK(idx < 4);
         ++hist[idx];
     }
-    CHECK(keel::abs(static_cast<keel::f64>(hist[0]) / 100000.0 - 0.1) < 0.005);
-    CHECK(keel::abs(static_cast<keel::f64>(hist[1]) / 100000.0 - 0.2) < 0.005);
-    CHECK(keel::abs(static_cast<keel::f64>(hist[2]) / 100000.0 - 0.3) < 0.005);
-    CHECK(keel::abs(static_cast<keel::f64>(hist[3]) / 100000.0 - 0.4) < 0.005);
+    CHECK(keel::abs(keel::as<keel::f64>(hist[0]) / 100000.0 - 0.1) < 0.005);
+    CHECK(keel::abs(keel::as<keel::f64>(hist[1]) / 100000.0 - 0.2) < 0.005);
+    CHECK(keel::abs(keel::as<keel::f64>(hist[2]) / 100000.0 - 0.3) < 0.005);
+    CHECK(keel::abs(keel::as<keel::f64>(hist[3]) / 100000.0 - 0.4) < 0.005);
 
     // Shuffle preserves all elements and distributes uniformly.
     keel::u64 pos0[5] = {};

@@ -44,14 +44,14 @@ struct SplitMix64 {
         return z ^ (z >> 31);
     }
 
-    [[nodiscard]] constexpr u32 next_u32() noexcept { return static_cast<u32>(next_u64() >> 32); }
+    [[nodiscard]] constexpr u32 next_u32() noexcept { return as<u32>(next_u64() >> 32); }
 
     [[nodiscard]] constexpr f64 next_f64() noexcept {
-        return static_cast<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
+        return as<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
     }
 
     [[nodiscard]] constexpr f32 next_f32() noexcept {
-        return static_cast<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
+        return as<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
     }
 
     [[nodiscard]] constexpr u64 operator()() noexcept { return next_u64(); }
@@ -94,9 +94,9 @@ struct Xoshiro256PlusPlus {
             return err;
         }
         auto load_u64 = [](const u8* p) noexcept -> u64 {
-            return static_cast<u64>(p[0]) | (static_cast<u64>(p[1]) << 8) | (static_cast<u64>(p[2]) << 16) |
-                   (static_cast<u64>(p[3]) << 24) | (static_cast<u64>(p[4]) << 32) | (static_cast<u64>(p[5]) << 40) |
-                   (static_cast<u64>(p[6]) << 48) | (static_cast<u64>(p[7]) << 56);
+            return as<u64>(p[0]) | (as<u64>(p[1]) << 8) | (as<u64>(p[2]) << 16) |
+                   (as<u64>(p[3]) << 24) | (as<u64>(p[4]) << 32) | (as<u64>(p[5]) << 40) |
+                   (as<u64>(p[6]) << 48) | (as<u64>(p[7]) << 56);
         };
         return Xoshiro256PlusPlus(load_u64(buf + 0), load_u64(buf + 8), load_u64(buf + 16), load_u64(buf + 24));
     }
@@ -113,14 +113,14 @@ struct Xoshiro256PlusPlus {
         return result;
     }
 
-    [[nodiscard]] constexpr u32 next_u32() noexcept { return static_cast<u32>(next_u64() >> 32); }
+    [[nodiscard]] constexpr u32 next_u32() noexcept { return as<u32>(next_u64() >> 32); }
 
     [[nodiscard]] constexpr f64 next_f64() noexcept {
-        return static_cast<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
+        return as<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
     }
 
     [[nodiscard]] constexpr f32 next_f32() noexcept {
-        return static_cast<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
+        return as<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
     }
 
     [[nodiscard]] constexpr u64 operator()() noexcept { return next_u64(); }
@@ -183,23 +183,23 @@ struct Pcg32 {
     [[nodiscard]] constexpr u32 next_u32() noexcept {
         const u64 oldstate = state;
         state = oldstate * 6364136223846793005ULL + inc;
-        const u32 xorshifted = static_cast<u32>(((oldstate >> 18) ^ oldstate) >> 27);
-        const u32 rot = static_cast<u32>(oldstate >> 59);
+        const u32 xorshifted = as<u32>(((oldstate >> 18) ^ oldstate) >> 27);
+        const u32 rot = as<u32>(oldstate >> 59);
         return (xorshifted >> rot) | (xorshifted << ((0u - rot) & 31u));
     }
 
     [[nodiscard]] constexpr u64 next_u64() noexcept {
-        const u64 hi = static_cast<u64>(next_u32());
-        const u64 lo = static_cast<u64>(next_u32());
+        const u64 hi = as<u64>(next_u32());
+        const u64 lo = as<u64>(next_u32());
         return (hi << 32) | lo;
     }
 
     [[nodiscard]] constexpr f64 next_f64() noexcept {
-        return static_cast<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
+        return as<f64>(next_u64() >> 11) * (1.0 / 9007199254740992.0);
     }
 
     [[nodiscard]] constexpr f32 next_f32() noexcept {
-        return static_cast<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
+        return as<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
     }
 
     [[nodiscard]] constexpr u32 operator()() noexcept { return next_u32(); }
@@ -282,18 +282,18 @@ constexpr void mul_u64_hi_lo(u64 a, u64 b, u64& hi, u64& lo) noexcept {
 template <typename G>
 [[nodiscard]] inline u64 draw_u64(G& rng) noexcept {
     if constexpr (requires { rng.next_u64(); }) {
-        return static_cast<u64>(rng.next_u64());
+        return as<u64>(rng.next_u64());
     } else if constexpr (requires { rng.next_u32(); }) {
-        const u64 hi = static_cast<u64>(rng.next_u32());
-        const u64 lo = static_cast<u64>(rng.next_u32());
+        const u64 hi = as<u64>(rng.next_u32());
+        const u64 lo = as<u64>(rng.next_u32());
         return (hi << 32) | lo;
     } else {
         using R = decltype(rng());
         if constexpr (sizeof(R) >= 8) {
-            return static_cast<u64>(rng());
+            return as<u64>(rng());
         } else {
-            const u64 hi = static_cast<u64>(static_cast<u32>(rng()));
-            const u64 lo = static_cast<u64>(static_cast<u32>(rng()));
+            const u64 hi = as<u64>(as<u32>(rng()));
+            const u64 lo = as<u64>(as<u32>(rng()));
             return (hi << 32) | lo;
         }
     }
@@ -302,15 +302,15 @@ template <typename G>
 template <typename G>
 [[nodiscard]] inline u32 draw_u32(G& rng) noexcept {
     if constexpr (requires { rng.next_u32(); }) {
-        return static_cast<u32>(rng.next_u32());
+        return as<u32>(rng.next_u32());
     } else if constexpr (requires { rng.next_u64(); }) {
-        return static_cast<u32>(rng.next_u64() >> 32);
+        return as<u32>(rng.next_u64() >> 32);
     } else {
         using R = decltype(rng());
         if constexpr (sizeof(R) >= 8) {
-            return static_cast<u32>(static_cast<u64>(rng()) >> 32);
+            return as<u32>(as<u64>(rng()) >> 32);
         } else {
-            return static_cast<u32>(rng());
+            return as<u32>(rng());
         }
     }
 }
@@ -355,7 +355,7 @@ template <typename G>
     if (k <= 32ULL) {
         return kSmallLogFact[k];
     }
-    const f64 x = static_cast<f64>(k);
+    const f64 x = as<f64>(k);
     const f64 inv = 1.0 / x;
     const f64 inv2 = inv * inv;
     constexpr f64 kHalfLogTau = 0.91893853320467274178032973640562; // 0.5 * ln(2*pi)
@@ -375,7 +375,7 @@ template <typename G>
     if constexpr (requires { rng.next_f64(); }) {
         return rng.next_f64();
     } else {
-        return static_cast<f64>(random_detail::draw_u64(rng) >> 11) * (1.0 / 9007199254740992.0);
+        return as<f64>(random_detail::draw_u64(rng) >> 11) * (1.0 / 9007199254740992.0);
     }
 }
 
@@ -388,7 +388,7 @@ template <typename G>
         for (;;) {
             const u64 bits = random_detail::draw_u64(rng) >> 11;
             if (bits != 0ULL) {
-                return static_cast<f64>(bits) * (1.0 / 9007199254740992.0);
+                return as<f64>(bits) * (1.0 / 9007199254740992.0);
             }
         }
     }
@@ -407,7 +407,7 @@ template <typename G>
     if constexpr (requires { rng.next_f32(); }) {
         return rng.next_f32();
     } else {
-        return static_cast<f32>(random_detail::draw_u32(rng) >> 8) * (1.0f / 16777216.0f);
+        return as<f32>(random_detail::draw_u32(rng) >> 8) * (1.0f / 16777216.0f);
     }
 }
 
@@ -450,18 +450,18 @@ template <typename G>
 template <typename G>
 [[nodiscard]] inline i64 uniform_i64(G& rng, i64 lo, i64 hi) noexcept {
     if (lo >= hi) return lo;
-    const u64 span = static_cast<u64>(hi) - static_cast<u64>(lo);
+    const u64 span = as<u64>(hi) - as<u64>(lo);
     if (span == Limits<u64>::kMax) {
-        return static_cast<i64>(random_detail::draw_u64(rng));
+        return as<i64>(random_detail::draw_u64(rng));
     }
-    return static_cast<i64>(static_cast<u64>(lo) + uniform_u64_bound(rng, span + 1ULL));
+    return as<i64>(as<u64>(lo) + uniform_u64_bound(rng, span + 1ULL));
 }
 
 /// Unbiased uniform usize in inclusive range [lo, hi]. Returns `lo` if `lo >= hi`.
 template <typename G>
 [[nodiscard]] inline usize uniform_usize(G& rng, usize lo, usize hi) noexcept {
     if (lo >= hi) return lo;
-    return static_cast<usize>(uniform_u64(rng, static_cast<u64>(lo), static_cast<u64>(hi)));
+    return as<usize>(uniform_u64(rng, as<u64>(lo), as<u64>(hi)));
 }
 
 /// Bernoulli trial with success probability `p` in [0, 1].
@@ -481,9 +481,9 @@ template <typename G>
 [[nodiscard]] inline f64 normal_f64(G& rng) noexcept {
     for (;;) {
         const u64 bits = random_detail::draw_u64(rng);
-        const usize k = static_cast<usize>(bits >> 56);
-        const i64 u53 = static_cast<i64>(bits & 0x001FFFFFFFFFFFFFULL) - (i64{1} << 52);
-        const f64 u = static_cast<f64>(u53) * (1.0 / 4503599627370496.0);
+        const usize k = as<usize>(bits >> 56);
+        const i64 u53 = as<i64>(bits & 0x001FFFFFFFFFFFFFULL) - (i64{1} << 52);
+        const f64 u = as<f64>(u53) * (1.0 / 4503599627370496.0);
         const f64 z = u * random_detail::kZigguratX[k + 1];
         if (keel::abs(z) < random_detail::kZigguratX[k]) {
             return z;
@@ -516,13 +516,13 @@ template <typename G>
 /// Standard normal float N(0, 1).
 template <typename G>
 [[nodiscard]] inline f32 normal_f32(G& rng) noexcept {
-    return static_cast<f32>(normal_f64(rng));
+    return as<f32>(normal_f64(rng));
 }
 
 /// Normal float N(mean, stddev^2).
 template <typename G>
 [[nodiscard]] inline f32 normal_f32(G& rng, f32 mean, f32 stddev) noexcept {
-    return mean + stddev * static_cast<f32>(normal_f64(rng));
+    return mean + stddev * as<f32>(normal_f64(rng));
 }
 
 /// Log-normal distribution: exp(mu + sigma * N(0, 1)).
@@ -647,11 +647,11 @@ template <typename G>
         const f64 us = 0.5 - keel::abs(u);
         const f64 kf = keel::floor((2.0 * a / us + b) * u + mean + 0.43);
         if (kf < 0.0) continue;
-        const u64 k = static_cast<u64>(kf);
+        const u64 k = as<u64>(kf);
         if (us >= 0.07 && v <= v_r) return k;
         if (us < 0.013 && v > us) continue;
         if (keel::log(v * inv_alpha / (a / (us * us) + b)) <=
-            -mean + static_cast<f64>(k) * log_mean - random_detail::log_factorial(k)) {
+            -mean + as<f64>(k) * log_mean - random_detail::log_factorial(k)) {
             return k;
         }
     }
@@ -668,33 +668,33 @@ template <typename G>
     const bool flipped = (p > 0.5);
     const f64 pp = flipped ? (1.0 - p) : p;
     const f64 q = 1.0 - pp;
-    const f64 np = static_cast<f64>(n) * pp;
+    const f64 np = as<f64>(n) * pp;
 
     u64 result = 0;
     if (np < 10.0) {
         // BINV: inverse CDF search.
         const f64 s = pp / q;
-        const f64 a = static_cast<f64>(n + 1ULL) * s;
-        f64 r = keel::pow(q, static_cast<f64>(n));
+        const f64 a = as<f64>(n + 1ULL) * s;
+        f64 r = keel::pow(q, as<f64>(n));
         f64 u = uniform_f64(rng);
         u64 x = 0;
         while (u > r && x < n) {
             u -= r;
             ++x;
-            r *= (a / static_cast<f64>(x) - s);
+            r *= (a / as<f64>(x) - s);
             if (r <= 0.0) break;
         }
         result = x;
     } else {
         // BTPE: Binomial Triangle-Parallelogram-Exponential rejection.
         const f64 fm = np + pp;
-        const i64 m = static_cast<i64>(fm);
+        const i64 m = as<i64>(fm);
         const f64 npq = np * q;
         const f64 p1 = keel::floor(2.195 * keel::sqrt(npq) - 4.6 * q) + 0.5;
-        const f64 xm = static_cast<f64>(m) + 0.5;
+        const f64 xm = as<f64>(m) + 0.5;
         const f64 xl = xm - p1;
         const f64 xr = xm + p1;
-        const f64 c = 0.134 + 20.5 / (15.3 + static_cast<f64>(m));
+        const f64 c = 0.134 + 20.5 / (15.3 + as<f64>(m));
         const f64 al = (fm - xl) / (fm - xl * pp);
         const f64 laml = al * (1.0 + 0.5 * al);
         const f64 ar = (xr - fm) / (xr * q);
@@ -704,60 +704,60 @@ template <typename G>
         const f64 p4 = p3 + c / lamr;
         const f64 r_ratio = pp / q;
         const f64 log_pq = keel::log(r_ratio);
-        const f64 g_val = static_cast<f64>(n + 1ULL) * r_ratio;
+        const f64 g_val = as<f64>(n + 1ULL) * r_ratio;
 
         i64 y = 0;
         for (;;) {
             const f64 u = uniform_f64(rng) * p4;
             f64 v = uniform_f64_open(rng);
             if (u <= p1) {
-                y = static_cast<i64>(keel::floor(xm - p1 * v + u));
+                y = as<i64>(keel::floor(xm - p1 * v + u));
                 break;
             }
             if (u <= p2) {
                 const f64 x = xl + (u - p1) / c;
                 v = v * c + 1.0 - keel::abs(xm - x) / p1;
                 if (v > 1.0 || v <= 0.0) continue;
-                y = static_cast<i64>(keel::floor(x));
+                y = as<i64>(keel::floor(x));
             } else if (u <= p3) {
-                y = static_cast<i64>(keel::floor(xl + keel::log(v) / laml));
+                y = as<i64>(keel::floor(xl + keel::log(v) / laml));
                 if (y < 0) continue;
                 v = v * (u - p2) * laml;
             } else {
-                y = static_cast<i64>(keel::floor(xr - keel::log(v) / lamr));
-                if (y > static_cast<i64>(n)) continue;
+                y = as<i64>(keel::floor(xr - keel::log(v) / lamr));
+                if (y > as<i64>(n)) continue;
                 v = v * (u - p3) * lamr;
             }
 
             const i64 k = (y >= m) ? (y - m) : (m - y);
-            if (k <= 20 || static_cast<f64>(k) >= 0.5 * npq - 1.0) {
+            if (k <= 20 || as<f64>(k) >= 0.5 * npq - 1.0) {
                 f64 f = 1.0;
                 if (m < y) {
                     for (i64 i = m + 1; i <= y; ++i) {
-                        f *= (g_val / static_cast<f64>(i) - r_ratio);
+                        f *= (g_val / as<f64>(i) - r_ratio);
                     }
                 } else if (m > y) {
                     for (i64 i = y + 1; i <= m; ++i) {
-                        f /= (g_val / static_cast<f64>(i) - r_ratio);
+                        f /= (g_val / as<f64>(i) - r_ratio);
                     }
                 }
                 if (v <= f) break;
             } else {
-                const f64 kf = static_cast<f64>(k);
+                const f64 kf = as<f64>(k);
                 const f64 rho = (kf / npq) * ((kf * (kf / 3.0 + 0.625) + (1.0 / 6.0)) / npq + 0.5);
                 const f64 t = -(kf * kf) / (2.0 * npq);
                 const f64 log_v = keel::log(v);
                 if (log_v < t - rho) break;
                 if (log_v > t + rho) continue;
-                const f64 log_f = (random_detail::log_factorial(static_cast<u64>(m)) +
-                                   random_detail::log_factorial(n - static_cast<u64>(m)) -
-                                   random_detail::log_factorial(static_cast<u64>(y)) -
-                                   random_detail::log_factorial(n - static_cast<u64>(y))) +
-                                  static_cast<f64>(y - m) * log_pq;
+                const f64 log_f = (random_detail::log_factorial(as<u64>(m)) +
+                                   random_detail::log_factorial(n - as<u64>(m)) -
+                                   random_detail::log_factorial(as<u64>(y)) -
+                                   random_detail::log_factorial(n - as<u64>(y))) +
+                                  as<f64>(y - m) * log_pq;
                 if (log_v <= log_f) break;
             }
         }
-        result = static_cast<u64>(y);
+        result = as<u64>(y);
     }
 
     return flipped ? (n - result) : result;
@@ -772,7 +772,7 @@ template <typename G>
     const f64 val = keel::floor(keel::log(uniform_f64_open(rng)) / keel::log(1.0 - p));
     if (val <= 0.0) return 0ULL;
     if (val >= 18446744073709551615.0) return Limits<u64>::kMax;
-    return static_cast<u64>(val);
+    return as<u64>(val);
 }
 
 /// Discrete categorical draw from non-negative `weights`.
@@ -806,7 +806,7 @@ template <typename G>
 template <typename G, typename T>
 inline void shuffle(G& rng, MutArrayRef<T> data) noexcept {
     for (usize i = data.size(); i > 1; --i) {
-        const usize j = static_cast<usize>(uniform_u64_bound(rng, static_cast<u64>(i)));
+        const usize j = as<usize>(uniform_u64_bound(rng, as<u64>(i)));
         if (j != i - 1) {
             T tmp = static_cast<T&&>(data[i - 1]);
             data[i - 1] = static_cast<T&&>(data[j]);
@@ -826,7 +826,7 @@ inline usize sample_indices(G& rng, usize n, MutArrayRef<usize> out) noexcept {
         out[i] = i;
     }
     for (usize i = k; i < n; ++i) {
-        const usize j = static_cast<usize>(uniform_u64_bound(rng, static_cast<u64>(i + 1)));
+        const usize j = as<usize>(uniform_u64_bound(rng, as<u64>(i + 1)));
         if (j < k) {
             out[j] = i;
         }

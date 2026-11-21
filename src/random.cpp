@@ -38,7 +38,7 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
         const ULONG chunk = (remaining > 0x7FFFFFFFu) ? 0x7FFFFFFFu : static_cast<ULONG>(remaining);
         const NTSTATUS status = BCryptGenRandom(nullptr, ptr, chunk, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
         if (status < 0) {
-            return Error{ErrorCode::IoError, static_cast<i32>(status)};
+            return Error{ErrorCode::IoError, as<i32>(status)};
         }
         ptr += chunk;
         remaining -= chunk;
@@ -56,10 +56,10 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
 #if defined(__linux__) || defined(__ANDROID__) || defined(__EMSCRIPTEN__)
     bool use_urandom = false;
     while (remaining > 0) {
-        const isize n = static_cast<isize>(::getrandom(ptr, remaining, 0));
+        const isize n = as<isize>(::getrandom(ptr, remaining, 0));
         if (n > 0) {
-            ptr += static_cast<usize>(n);
-            remaining -= static_cast<usize>(n);
+            ptr += as<usize>(n);
+            remaining -= as<usize>(n);
             continue;
         }
         if (n < 0 && errno == EINTR) {
@@ -69,7 +69,7 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
             use_urandom = true;
             break;
         }
-        return Error{ErrorCode::IoError, static_cast<i32>(errno)};
+        return Error{ErrorCode::IoError, as<i32>(errno)};
     }
     if (!use_urandom) {
         return Error::ok();
@@ -78,23 +78,23 @@ Error os_random_bytes(MutArrayRef<u8> out) noexcept {
 
     i32 fd = -1;
     do {
-        fd = static_cast<i32>(::open("/dev/urandom", O_RDONLY | O_CLOEXEC));
+        fd = as<i32>(::open("/dev/urandom", O_RDONLY | O_CLOEXEC));
     } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
-        return Error{ErrorCode::IoError, static_cast<i32>(errno)};
+        return Error{ErrorCode::IoError, as<i32>(errno)};
     }
 
     while (remaining > 0) {
-        const isize n = static_cast<isize>(::read(fd, ptr, remaining));
+        const isize n = as<isize>(::read(fd, ptr, remaining));
         if (n > 0) {
-            ptr += static_cast<usize>(n);
-            remaining -= static_cast<usize>(n);
+            ptr += as<usize>(n);
+            remaining -= as<usize>(n);
             continue;
         }
         if (n < 0 && errno == EINTR) {
             continue;
         }
-        const i32 err = (n < 0) ? static_cast<i32>(errno) : 0;
+        const i32 err = (n < 0) ? as<i32>(errno) : 0;
         ::close(fd);
         return Error{ErrorCode::IoError, err};
     }
@@ -110,10 +110,10 @@ Result<u64, Error> os_random_u64() noexcept {
     if (err.is_err()) {
         return err;
     }
-    const u64 val = static_cast<u64>(buf[0]) | (static_cast<u64>(buf[1]) << 8) | (static_cast<u64>(buf[2]) << 16) |
-                    (static_cast<u64>(buf[3]) << 24) | (static_cast<u64>(buf[4]) << 32) |
-                    (static_cast<u64>(buf[5]) << 40) | (static_cast<u64>(buf[6]) << 48) |
-                    (static_cast<u64>(buf[7]) << 56);
+    const u64 val = as<u64>(buf[0]) | (as<u64>(buf[1]) << 8) | (as<u64>(buf[2]) << 16) |
+                    (as<u64>(buf[3]) << 24) | (as<u64>(buf[4]) << 32) |
+                    (as<u64>(buf[5]) << 40) | (as<u64>(buf[6]) << 48) |
+                    (as<u64>(buf[7]) << 56);
     return val;
 }
 
@@ -123,8 +123,8 @@ Result<u32, Error> os_random_u32() noexcept {
     if (err.is_err()) {
         return err;
     }
-    const u32 val = static_cast<u32>(buf[0]) | (static_cast<u32>(buf[1]) << 8) | (static_cast<u32>(buf[2]) << 16) |
-                    (static_cast<u32>(buf[3]) << 24);
+    const u32 val = as<u32>(buf[0]) | (as<u32>(buf[1]) << 8) | (as<u32>(buf[2]) << 16) |
+                    (as<u32>(buf[3]) << 24);
     return val;
 }
 
@@ -147,7 +147,7 @@ Mt19937::Mt19937(u32 s) noexcept {
 void Mt19937::seed(u32 s) noexcept {
     mt_[0] = s;
     for (usize i = 1; i < kMtN; ++i) {
-        mt_[i] = 1812433253u * (mt_[i - 1] ^ (mt_[i - 1] >> 30)) + static_cast<u32>(i);
+        mt_[i] = 1812433253u * (mt_[i - 1] ^ (mt_[i - 1] >> 30)) + as<u32>(i);
     }
     mti_ = kMtN;
 }
@@ -162,7 +162,7 @@ void Mt19937::seed_array(ArrayRef<u32> key) noexcept {
     usize j = 0;
     usize k = (kMtN > key.size()) ? kMtN : key.size();
     for (; k > 0; --k) {
-        mt_[i] = (mt_[i] ^ ((mt_[i - 1] ^ (mt_[i - 1] >> 30)) * 1664525u)) + key[j] + static_cast<u32>(j);
+        mt_[i] = (mt_[i] ^ ((mt_[i - 1] ^ (mt_[i - 1] >> 30)) * 1664525u)) + key[j] + as<u32>(j);
         ++i;
         ++j;
         if (i >= kMtN) {
@@ -174,7 +174,7 @@ void Mt19937::seed_array(ArrayRef<u32> key) noexcept {
         }
     }
     for (k = kMtN - 1; k > 0; --k) {
-        mt_[i] = (mt_[i] ^ ((mt_[i - 1] ^ (mt_[i - 1] >> 30)) * 1566083941u)) - static_cast<u32>(i);
+        mt_[i] = (mt_[i] ^ ((mt_[i - 1] ^ (mt_[i - 1] >> 30)) * 1566083941u)) - as<u32>(i);
         ++i;
         if (i >= kMtN) {
             mt_[0] = mt_[kMtN - 1];
@@ -214,15 +214,15 @@ u32 Mt19937::next_u32() noexcept {
 }
 
 u64 Mt19937::next_u64() noexcept {
-    const u64 hi = static_cast<u64>(next_u32());
-    const u64 lo = static_cast<u64>(next_u32());
+    const u64 hi = as<u64>(next_u32());
+    const u64 lo = as<u64>(next_u32());
     return (hi << 32) | lo;
 }
 
 f64 Mt19937::next_f64() noexcept {
     const u32 a = next_u32() >> 5;
     const u32 b = next_u32() >> 6;
-    return (static_cast<f64>(a) * 67108864.0 + static_cast<f64>(b)) * (1.0 / 9007199254740992.0);
+    return (as<f64>(a) * 67108864.0 + as<f64>(b)) * (1.0 / 9007199254740992.0);
 }
 
 f64 Mt19937::next_f64_open() noexcept {
@@ -230,17 +230,17 @@ f64 Mt19937::next_f64_open() noexcept {
         const u32 a = next_u32() >> 5;
         const u32 b = next_u32() >> 6;
         if ((a | b) != 0u) {
-            return (static_cast<f64>(a) * 67108864.0 + static_cast<f64>(b)) * (1.0 / 9007199254740992.0);
+            return (as<f64>(a) * 67108864.0 + as<f64>(b)) * (1.0 / 9007199254740992.0);
         }
     }
     seed(5489u);
     const u32 a = next_u32() >> 5;
     const u32 b = next_u32() >> 6;
-    return (static_cast<f64>(a) * 67108864.0 + static_cast<f64>(b)) * (1.0 / 9007199254740992.0);
+    return (as<f64>(a) * 67108864.0 + as<f64>(b)) * (1.0 / 9007199254740992.0);
 }
 
 f32 Mt19937::next_f32() noexcept {
-    return static_cast<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
+    return as<f32>(next_u32() >> 8) * (1.0f / 16777216.0f);
 }
 
 void Mt19937::get_state(MutArrayRef<u32> out_state, usize& out_index) const noexcept {
