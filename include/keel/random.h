@@ -7,7 +7,7 @@
 #include "keel/ref.h"
 #include "keel/result.h"
 
-namespace keel {
+namespace keel::random {
 
 // ============================================================================
 // 1. OS Cryptographic Entropy
@@ -835,4 +835,4 @@ inline usize sample_indices(G& rng, usize n, MutArrayRef<usize> out) noexcept {
     return k;
 }
 
-} // namespace keel
+} // namespace keel::random

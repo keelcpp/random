@@ -20,7 +20,7 @@
 #endif
 #endif
 
-namespace keel {
+namespace keel::random {
 
 // ============================================================================
 // 1. OS Cryptographic Entropy
@@ -413,4 +413,4 @@ const f64 kZigguratF[257] = {
 
 } // namespace random_detail
 
-} // namespace keel
+} // namespace keel::random
