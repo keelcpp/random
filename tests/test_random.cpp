@@ -1,6 +1,9 @@
+#include "keel/array.h"
 #include "keel/format.h"
+#include "keel/fs.h"
 #include "keel/math.h"
 #include "keel/random.h"
+#include "keel/string.h"
 
 using namespace keel::random;
 
@@ -10,7 +13,7 @@ keel::i32 g_failures = 0;
 
 void check(bool cond, const char* expr, keel::i32 line) {
     if (!cond) {
-        keel::eprintln("FAIL [line %d]: %s", line, expr);
+        keel::eprintln("FAIL [line {}]: {}", line, expr);
         ++g_failures;
     }
 }
@@ -381,9 +384,147 @@ void test_discrete_and_combinatorial() {
     }
 }
 
+void test_nan_inf_and_extreme_bounds() {
+    keel::random::DefaultRng rng(0xCAFEBABEULL);
+    const keel::f64 nan = keel::Limits<keel::f64>::quiet_nan();
+    const keel::f64 inf = keel::Limits<keel::f64>::infinity();
+
+    // NaN & Inf must NEVER hang or produce UB in any distribution!
+    CHECK(keel::random::exponential_f64(rng, nan) == 0.0);
+    CHECK(keel::random::exponential_f64(rng, inf) == 0.0);
+    CHECK(keel::random::exponential_f64(rng, -1.0) == 0.0);
+    CHECK(keel::random::gamma_f64(rng, nan, 1.0) == 0.0);
+    CHECK(keel::random::gamma_f64(rng, inf, 1.0) == 0.0);
+    CHECK(keel::random::gamma_f64(rng, 2.0, nan) == 0.0);
+    CHECK(keel::random::gamma_f64(rng, 2.0, inf) == 0.0);
+    CHECK(keel::random::beta_f64(rng, nan, 1.0) == 0.0);
+    CHECK(keel::random::beta_f64(rng, 1.0, nan) == 0.0);
+    CHECK(keel::random::beta_f64(rng, inf, 1.0) == 0.0);
+    CHECK(keel::random::chi_squared_f64(rng, nan) == 0.0);
+    CHECK(keel::random::chi_squared_f64(rng, inf) == 0.0);
+    CHECK(keel::random::student_t_f64(rng, nan) == 0.0);
+    CHECK(keel::random::student_t_f64(rng, inf) == 0.0);
+    CHECK(keel::random::weibull_f64(rng, nan, 1.0) == 0.0);
+    CHECK(keel::random::weibull_f64(rng, 1.0, nan) == 0.0);
+    CHECK(keel::random::poisson_u64(rng, nan) == 0ULL);
+    CHECK(keel::random::poisson_u64(rng, inf) == 0ULL);
+    CHECK(keel::random::binomial_u64(rng, 100ULL, nan) == 0ULL);
+    CHECK(keel::random::binomial_u64(rng, 100ULL, -inf) == 0ULL);
+    CHECK(keel::random::binomial_u64(rng, 100ULL, inf) == 100ULL);
+    CHECK(!keel::random::bernoulli(rng, nan));
+    CHECK(keel::random::geometric_u64(rng, nan) == keel::Limits<keel::u64>::kMax);
+    CHECK(keel::random::geometric_u64(rng, 0.0) == keel::Limits<keel::u64>::kMax);
+
+    // Astronomical n in binomial_u64 (formerly wrapped n+1ULL and hung in BTPE).
+    const keel::u64 b_huge = keel::random::binomial_u64(rng, keel::Limits<keel::u64>::kMax, 0.5);
+    CHECK(b_huge > (keel::u64{1} << 62) && b_huge < (keel::u64{3} << 62));
+
+    // Tiny p in geometric_u64 (uses log1p(-p), exact for p = 1e-12).
+    const keel::u64 g_tiny = keel::random::geometric_u64(rng, 1e-12);
+    CHECK(g_tiny > 1000000ULL && g_tiny < 1000000000000000ULL);
+
+    // Huge weights near DBL_MAX in discrete_index (overflow-safe scaling).
+    const keel::f64 huge_w[3] = {1e307, 2e307, 3e307};
+    keel::u64 hcnt[3] = {};
+    for (keel::usize i = 0; i < 6000; ++i) {
+        const keel::usize idx = keel::random::discrete_index(rng, keel::ArrayRef<keel::f64>(huge_w, 3));
+        CHECK(idx < 3);
+        ++hcnt[idx];
+    }
+    CHECK(hcnt[0] > 700 && hcnt[2] > 2600);
+}
+
+keel::i32 cli_dump_reference(keel::StringRef out_dir) {
+    // 1. PRNG reference streams (binary u64/u32)
+    {
+        keel::random::Mt19937 mt(5489u);
+        keel::Array<keel::u32> out_mt(1000);
+        for (keel::usize i = 0; i < 1000; ++i) out_mt[i] = mt.next_u32();
+        (void)keel::fs_write_file(
+            keel::format("{}/mt19937_5489.u32", out_dir),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(out_mt.data()), out_mt.size() * 4));
+
+        const keel::u32 keys[4] = {0x123u, 0x234u, 0x345u, 0x456u};
+        mt.seed_array(keel::ArrayRef<keel::u32>(keys, 4));
+        for (keel::usize i = 0; i < 1000; ++i) out_mt[i] = mt.next_u32();
+        (void)keel::fs_write_file(
+            keel::format("{}/mt19937_array.u32", out_dir),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(out_mt.data()), out_mt.size() * 4));
+
+        keel::random::SplitMix64 sm(123456789ULL);
+        keel::Array<keel::u64> out_sm(128);
+        for (keel::usize i = 0; i < 128; ++i) out_sm[i] = sm.next_u64();
+        (void)keel::fs_write_file(
+            keel::format("{}/splitmix64.u64", out_dir),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(out_sm.data()), out_sm.size() * 8));
+
+        keel::random::Xoshiro256PlusPlus xo(987654321ULL);
+        keel::Array<keel::u64> out_xo(128);
+        for (keel::usize i = 0; i < 64; ++i) out_xo[i] = xo.next_u64();
+        xo.jump();
+        for (keel::usize i = 64; i < 96; ++i) out_xo[i] = xo.next_u64();
+        xo.long_jump();
+        for (keel::usize i = 96; i < 128; ++i) out_xo[i] = xo.next_u64();
+        (void)keel::fs_write_file(
+            keel::format("{}/xoshiro256pp.u64", out_dir),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(out_xo.data()), out_xo.size() * 8));
+
+        keel::random::Pcg32 pcg(42ULL, 54ULL);
+        keel::Array<keel::u32> out_pcg(128);
+        for (keel::usize i = 0; i < 128; ++i) out_pcg[i] = pcg.next_u32();
+        (void)keel::fs_write_file(
+            keel::format("{}/pcg32.u32", out_dir),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(out_pcg.data()), out_pcg.size() * 4));
+    }
+
+    // 2. Distribution sample batches (100,000 samples each) for SciPy KS / chi-square verification
+    keel::random::DefaultRng rng(20261126ULL);
+    constexpr keel::usize kN = 100000;
+    auto dump_f64 = [&](const char* name, auto&& fn) {
+        keel::Array<keel::f64> buf(kN);
+        for (keel::usize i = 0; i < kN; ++i) buf[i] = fn();
+        (void)keel::fs_write_file(
+            keel::format("{}/{}.f64", out_dir, name),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(buf.data()), buf.size() * 8));
+    };
+    auto dump_u64 = [&](const char* name, auto&& fn) {
+        keel::Array<keel::u64> buf(kN);
+        for (keel::usize i = 0; i < kN; ++i) buf[i] = fn();
+        (void)keel::fs_write_file(
+            keel::format("{}/{}.u64", out_dir, name),
+            keel::ArrayRef<keel::u8>(reinterpret_cast<const keel::u8*>(buf.data()), buf.size() * 8));
+    };
+
+    dump_f64("uniform", [&]() { return uniform_f64(rng, -3.5, 4.5); });
+    dump_f64("normal", [&]() { return normal_f64(rng, 2.5, 1.75); });
+    dump_f64("lognormal", [&]() { return lognormal_f64(rng, 0.3, 0.6); });
+    dump_f64("exponential", [&]() { return exponential_f64(rng, 1.8); });
+    dump_f64("gamma_gt1", [&]() { return gamma_f64(rng, 3.7, 2.2); });
+    dump_f64("gamma_lt1", [&]() { return gamma_f64(rng, 0.4, 1.5); });
+    dump_f64("beta", [&]() { return beta_f64(rng, 2.2, 4.8); });
+    dump_f64("beta_tiny", [&]() { return beta_f64(rng, 0.25, 0.35); });
+    dump_f64("chi2", [&]() { return chi_squared_f64(rng, 5.5); });
+    dump_f64("student_t", [&]() { return student_t_f64(rng, 6.0); });
+    dump_f64("weibull", [&]() { return weibull_f64(rng, 1.7, 2.5); });
+    dump_u64("poisson_knuth", [&]() { return poisson_u64(rng, 7.5); });
+    dump_u64("poisson_ptrs", [&]() { return poisson_u64(rng, 45.0); });
+    dump_u64("binomial_binv", [&]() { return binomial_u64(rng, 25ULL, 0.2); });
+    dump_u64("binomial_btpe", [&]() { return binomial_u64(rng, 120ULL, 0.35); });
+    dump_u64("binomial_flip", [&]() { return binomial_u64(rng, 200ULL, 0.8); });
+    dump_u64("geometric", [&]() { return geometric_u64(rng, 0.3); });
+    dump_u64("geometric_tiny", [&]() { return geometric_u64(rng, 1e-4); });
+    const keel::f64 w[5] = {0.1, 0.25, 0.05, 0.4, 0.2};
+    dump_u64("discrete", [&]() { return keel::as<keel::u64>(discrete_index(rng, keel::ArrayRef<keel::f64>(w, 5))); });
+    return 0;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 3 && keel::StringRef(argv[1]) == "--dump-ref") {
+        return cli_dump_reference(keel::StringRef(argv[2]));
+    }
+
     test_os_random();
     test_prng_determinism();
     test_mt19937_vectors();
@@ -391,11 +532,12 @@ int main() {
     test_uniform_distributions();
     test_continuous_distributions();
     test_discrete_and_combinatorial();
+    test_nan_inf_and_extreme_bounds();
 
     if (g_failures == 0) {
         keel::println("All keel::random tests passed.");
         return 0;
     }
-    keel::eprintln("%d test failure(s).", g_failures);
+    keel::eprintln("{} test failure(s).", g_failures);
     return 1;
 }

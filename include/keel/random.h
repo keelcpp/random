@@ -394,10 +394,10 @@ template <typename G>
     }
 }
 
-/// Uniform double in [a, b). Returns `a` if `a >= b`.
+/// Uniform double in [a, b). Returns `a` if `!(a < b)`.
 template <typename G>
 [[nodiscard]] inline f64 uniform_f64(G& rng, f64 a, f64 b) noexcept {
-    if (a >= b) return a;
+    if (!(a < b)) return a;
     return a + (b - a) * uniform_f64(rng);
 }
 
@@ -411,10 +411,10 @@ template <typename G>
     }
 }
 
-/// Uniform float in [a, b). Returns `a` if `a >= b`.
+/// Uniform float in [a, b). Returns `a` if `!(a < b)`.
 template <typename G>
 [[nodiscard]] inline f32 uniform_f32(G& rng, f32 a, f32 b) noexcept {
-    if (a >= b) return a;
+    if (!(a < b)) return a;
     return a + (b - a) * uniform_f32(rng);
 }
 
@@ -467,7 +467,7 @@ template <typename G>
 /// Bernoulli trial with success probability `p` in [0, 1].
 template <typename G>
 [[nodiscard]] inline bool bernoulli(G& rng, f64 p = 0.5) noexcept {
-    if (p <= 0.0) return false;
+    if (!(p > 0.0)) return false;
     if (p >= 1.0) return true;
     return uniform_f64(rng) < p;
 }
@@ -534,7 +534,7 @@ template <typename G>
 /// Exponential distribution with rate parameter `rate > 0` (mean = 1 / rate).
 template <typename G>
 [[nodiscard]] inline f64 exponential_f64(G& rng, f64 rate = 1.0) noexcept {
-    if (rate <= 0.0) return 0.0;
+    if (!(rate > 0.0) || !keel::is_finite(rate)) return 0.0;
     return -keel::log(uniform_f64_open(rng)) / rate;
 }
 
@@ -542,7 +542,7 @@ template <typename G>
 /// (0 < shape < 1). Mean = shape * scale.
 template <typename G>
 [[nodiscard]] inline f64 gamma_f64(G& rng, f64 shape, f64 scale = 1.0) noexcept {
-    if (shape <= 0.0 || scale <= 0.0) return 0.0;
+    if (!(shape > 0.0) || !keel::is_finite(shape) || !(scale > 0.0) || !keel::is_finite(scale)) return 0.0;
     if (shape < 1.0) {
         const f64 g = gamma_f64(rng, shape + 1.0, scale);
         const f64 u = uniform_f64_open(rng);
@@ -569,7 +569,7 @@ template <typename G>
 /// Beta(a, b) on [0, 1] for a > 0, b > 0.
 template <typename G>
 [[nodiscard]] inline f64 beta_f64(G& rng, f64 a, f64 b) noexcept {
-    if (a <= 0.0 || b <= 0.0) return 0.0;
+    if (!(a > 0.0) || !keel::is_finite(a) || !(b > 0.0) || !keel::is_finite(b)) return 0.0;
     const f64 x = gamma_f64(rng, a, 1.0);
     const f64 y = gamma_f64(rng, b, 1.0);
     const f64 sum = x + y;
@@ -591,16 +591,19 @@ template <typename G>
 /// Chi-squared distribution with `df > 0` degrees of freedom.
 template <typename G>
 [[nodiscard]] inline f64 chi_squared_f64(G& rng, f64 df) noexcept {
-    if (df <= 0.0) return 0.0;
+    if (!(df > 0.0) || !keel::is_finite(df)) return 0.0;
     return gamma_f64(rng, 0.5 * df, 2.0);
 }
 
 /// Student's t distribution with `df > 0` degrees of freedom.
 template <typename G>
 [[nodiscard]] inline f64 student_t_f64(G& rng, f64 df) noexcept {
-    if (df <= 0.0) return 0.0;
+    if (!(df > 0.0) || !keel::is_finite(df)) return 0.0;
     const f64 z = normal_f64(rng);
-    const f64 v = chi_squared_f64(rng, df);
+    f64 v = chi_squared_f64(rng, df);
+    if (v <= 0.0) {
+        v = Limits<f64>::kMinPositive;
+    }
     return z / keel::sqrt(v / df);
 }
 
@@ -608,7 +611,7 @@ template <typename G>
 /// CDF: F(x) = 1 - exp(-(x / scale)^shape).
 template <typename G>
 [[nodiscard]] inline f64 weibull_f64(G& rng, f64 shape, f64 scale = 1.0) noexcept {
-    if (shape <= 0.0 || scale <= 0.0) return 0.0;
+    if (!(shape > 0.0) || !keel::is_finite(shape) || !(scale > 0.0) || !keel::is_finite(scale)) return 0.0;
     return scale * keel::pow(-keel::log(uniform_f64_open(rng)), 1.0 / shape);
 }
 
@@ -620,7 +623,8 @@ template <typename G>
 /// Uses Knuth's method for mean < 30 and Hormann's PTRS for mean >= 30.
 template <typename G>
 [[nodiscard]] inline u64 poisson_u64(G& rng, f64 mean) noexcept {
-    if (mean <= 0.0 || !keel::is_finite(mean)) return 0ULL;
+    if (!(mean > 0.0) || !keel::is_finite(mean)) return 0ULL;
+    if (mean >= 18446744073709551615.0) return Limits<u64>::kMax;
 
     if (mean < 30.0) {
         const f64 limit = keel::exp(-mean);
@@ -646,7 +650,7 @@ template <typename G>
         const f64 v = uniform_f64_open(rng);
         const f64 us = 0.5 - keel::abs(u);
         const f64 kf = keel::floor((2.0 * a / us + b) * u + mean + 0.43);
-        if (kf < 0.0) continue;
+        if (kf < 0.0 || kf >= 18446744073709551615.0) continue;
         const u64 k = as<u64>(kf);
         if (us >= 0.07 && v <= v_r) return k;
         if (us < 0.013 && v > us) continue;
@@ -662,20 +666,21 @@ template <typename G>
 /// & Schmeiser 1988) for larger means.
 template <typename G>
 [[nodiscard]] inline u64 binomial_u64(G& rng, u64 n, f64 p) noexcept {
-    if (n == 0ULL || p <= 0.0) return 0ULL;
+    if (n == 0ULL || !(p > 0.0)) return 0ULL;
     if (p >= 1.0) return n;
 
     const bool flipped = (p > 0.5);
     const f64 pp = flipped ? (1.0 - p) : p;
     const f64 q = 1.0 - pp;
-    const f64 np = as<f64>(n) * pp;
+    const f64 nf = as<f64>(n);
+    const f64 np = nf * pp;
 
     u64 result = 0;
     if (np < 10.0) {
         // BINV: inverse CDF search.
         const f64 s = pp / q;
-        const f64 a = as<f64>(n + 1ULL) * s;
-        f64 r = keel::pow(q, as<f64>(n));
+        const f64 a = (nf + 1.0) * s;
+        f64 r = keel::pow(q, nf);
         f64 u = uniform_f64(rng);
         u64 x = 0;
         while (u > r && x < n) {
@@ -685,6 +690,17 @@ template <typename G>
             if (r <= 0.0) break;
         }
         result = x;
+    } else if (n > (u64{1} << 52)) {
+        // Normal approximation for astronomically large n where f64 loses integer granularity.
+        const f64 stddev = keel::sqrt(np * q);
+        const f64 sample = keel::round(np + stddev * normal_f64(rng));
+        if (sample <= 0.0) {
+            result = 0ULL;
+        } else if (sample >= nf) {
+            result = n;
+        } else {
+            result = as<u64>(sample);
+        }
     } else {
         // BTPE: Binomial Triangle-Parallelogram-Exponential rejection.
         const f64 fm = np + pp;
@@ -704,7 +720,7 @@ template <typename G>
         const f64 p4 = p3 + c / lamr;
         const f64 r_ratio = pp / q;
         const f64 log_pq = keel::log(r_ratio);
-        const f64 g_val = as<f64>(n + 1ULL) * r_ratio;
+        const f64 g_val = (nf + 1.0) * r_ratio;
 
         i64 y = 0;
         for (;;) {
@@ -720,12 +736,14 @@ template <typename G>
                 if (v > 1.0 || v <= 0.0) continue;
                 y = as<i64>(keel::floor(x));
             } else if (u <= p3) {
-                y = as<i64>(keel::floor(xl + keel::log(v) / laml));
-                if (y < 0) continue;
+                const f64 yf = keel::floor(xl + keel::log(v) / laml);
+                if (yf < 0.0) continue;
+                y = as<i64>(yf);
                 v = v * (u - p2) * laml;
             } else {
-                y = as<i64>(keel::floor(xr - keel::log(v) / lamr));
-                if (y > as<i64>(n)) continue;
+                const f64 yf = keel::floor(xr - keel::log(v) / lamr);
+                if (yf > nf) continue;
+                y = as<i64>(yf);
                 v = v * (u - p3) * lamr;
             }
 
@@ -767,9 +785,9 @@ template <typename G>
 /// P(X = k) = (1 - p)^k * p.
 template <typename G>
 [[nodiscard]] inline u64 geometric_u64(G& rng, f64 p) noexcept {
-    if (p <= 0.0) return Limits<u64>::kMax;
+    if (!(p > 0.0)) return Limits<u64>::kMax;
     if (p >= 1.0) return 0ULL;
-    const f64 val = keel::floor(keel::log(uniform_f64_open(rng)) / keel::log(1.0 - p));
+    const f64 val = keel::floor(keel::log(uniform_f64_open(rng)) / keel::log1p(-p));
     if (val <= 0.0) return 0ULL;
     if (val >= 18446744073709551615.0) return Limits<u64>::kMax;
     return as<u64>(val);
@@ -780,22 +798,30 @@ template <typename G>
 template <typename G>
 [[nodiscard]] inline usize discrete_index(G& rng, ArrayRef<f64> weights) noexcept {
     if (weights.empty()) return 0;
-    f64 total = 0.0;
+    f64 max_w = 0.0;
     usize last_positive = 0;
     for (usize i = 0; i < weights.size(); ++i) {
         const f64 w = weights[i];
         if (w > 0.0 && keel::is_finite(w)) {
-            total += w;
+            if (w > max_w) max_w = w;
             last_positive = i;
         }
     }
-    if (total <= 0.0) return 0;
+    if (!(max_w > 0.0)) return 0;
+    const f64 inv_max = 1.0 / max_w;
+    f64 total = 0.0;
+    for (usize i = 0; i < weights.size(); ++i) {
+        const f64 w = weights[i];
+        if (w > 0.0 && keel::is_finite(w)) {
+            total += w * inv_max;
+        }
+    }
     const f64 target = uniform_f64(rng) * total;
     f64 accum = 0.0;
     for (usize i = 0; i < weights.size(); ++i) {
         const f64 w = weights[i];
         if (w > 0.0 && keel::is_finite(w)) {
-            accum += w;
+            accum += w * inv_max;
             if (target < accum) return i;
         }
     }

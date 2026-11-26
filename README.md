@@ -21,4 +21,7 @@ Deterministic, cross-platform pseudo-random number generators, probability distr
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ctest --test-dir build --output-on-failure
+python tests/verify_reference.py build/Release/test_random.exe
 ```
+
+`tests/verify_reference.py` validates PRNG bitstreams against NumPy (`MT19937`) and canonical reference implementations (`SplitMix64`, `Xoshiro256++` including `jump`/`long_jump`, `PCG32`), and cross-checks all continuous and discrete distributions via SciPy (`scipy.stats`) Kolmogorov-Smirnov and Pearson chi-squared goodness-of-fit tests.
